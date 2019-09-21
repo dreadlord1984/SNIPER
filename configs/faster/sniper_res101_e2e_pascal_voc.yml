@@ -5,11 +5,10 @@
 # --------------------------------------------------------------
 ---
 MXNET_VERSION: "mxnet"
-output_path: "./output/sniper_res_101_bn_mask"
-symbol: resnet_mx_101_e2e_mask
+output_path: "./output/sniper_res101_bn"
+symbol: resnet_mx_101_e2e
 gpus: '0,1,2,3,4,5,6,7'
 CLASS_AGNOSTIC: true
-
 default:
   kvstore: device
 network:
@@ -24,6 +23,7 @@ network:
   - conv0
   - bn0
   - stage1
+
   ANCHOR_RATIOS:
   - 0.5
   - 1
@@ -37,33 +37,33 @@ network:
   - 16
   - 24
   NUM_ANCHORS: 21
-
 dataset:
-  NUM_CLASSES: 81
-  dataset: coco
-  dataset_path: "./data/coco"
-  image_set: train2014+val2014
+  NUM_CLASSES: 21
+  dataset: PascalVOC
+  dataset_path: "./data/VOCdevkit"
+  image_set: 2007_trainval+2012_trainval
   root_path: "./data"
-  test_image_set: test-dev2015
+  test_image_set: 2007_test
   proposal: rpn
-
 TRAIN:
+  ## CHIP GENERATION PARAMS
   # Whether to use C++ or python code for chip generation
   CPP_CHIPS: true
   # How many parts the dataset should be divided to for parallel chip generation
   # This is used to keep the memory limited
   CHIPS_DB_PARTS: 20
 
+
   # Multi-processing params
   # These parameters are used for parallel chip generation, NMS, etc.
   # Please consider adjusting them for your system
-  NUM_PROCESS: 64
+  NUM_PROCESS: 32
   NUM_THREAD: 8
 
   # Whether to train with segmentation mask
-  WITH_MASK: true
+  WITH_MASK: false
 
- # Training scales
+  # Training scales
   # The scales should be sorted in descending order based on size 
   # (the first scale is the highest resolution and the last scale is the lowest one)
   # Two types of scale definition are supported
@@ -85,7 +85,7 @@ TRAIN:
   # - 1.667
   # - 512.0
 
-
+  
 
   # Valid ranges in each scale (boxes which the square root of their area
   # lie in each range are marked as valid in that scale).
@@ -100,6 +100,7 @@ TRAIN:
   - !!python/tuple [32,150]
   - !!python/tuple [120,-1]
 
+
   lr: 0.015 
   lr_step: '5.33'
   warmup: true
@@ -107,19 +108,18 @@ TRAIN:
   warmup_lr: 0.0005 
   wd: 0.0001
   scale: 100.0
-  warmup_step: 1000
+  warmup_step: 1000 
   begin_epoch: 0
   end_epoch: 7
-  # whether resume training
+
   # whether flip image
   FLIP: true
   # whether shuffle image
   SHUFFLE: true
   # Number of images per GPU
-  BATCH_IMAGES: 10
+  BATCH_IMAGES: 16
   # e2e changes behavior of anchor loader and metric
   END2END: true
-
   # R-CNN
   # rcnn rois batch size
   BATCH_ROIS: -1
@@ -192,8 +192,6 @@ TEST:
   # if greater than 1, the roidb is distributed over
   # concurrent jobs to increase throughput
   CONCURRENT_JOBS: 2
-
-
 
   # Valid ranges in each scale (boxes which the square root of their area
   # lie in each range are marked as valid in that scale).

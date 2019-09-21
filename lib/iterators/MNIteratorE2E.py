@@ -19,10 +19,15 @@ class MNIteratorE2E(MNIteratorBase):
         self.num_classes = roidb[0]['gt_overlaps'].shape[1]
         self.bbox_means = np.tile(np.array(config.TRAIN.BBOX_MEANS), (self.num_classes, 1))
         self.bbox_stds = np.tile(np.array(config.TRAIN.BBOX_STDS), (self.num_classes, 1))
-        self.data_name = ['data', 'valid_ranges', 'im_info']
-        self.label_name = ['label', 'bbox_target', 'bbox_weight', 'gt_boxes']
+
+        self.data_name = ['data'] if config.TRAIN.ONLY_PROPOSAL else \
+            ['data', 'valid_ranges', 'im_info']
+        self.label_name = ['label', 'bbox_target', 'bbox_weight'] if config.TRAIN.ONLY_PROPOSAL else \
+            ['label', 'bbox_target', 'bbox_weight', 'gt_boxes']
+
         if config.TRAIN.WITH_MASK:
             self.label_name.append('gt_masks')
+
         self.pool = Pool(config.TRAIN.NUM_PROCESS)
         self.epiter = 0
         self.im_worker = im_worker(crop_size=self.crop_size[0], cfg=config)
@@ -39,9 +44,10 @@ class MNIteratorE2E(MNIteratorBase):
         # Devide the dataset and  extract chips for each part
         n_per_part = int(math.ceil(len(self.roidb) / float(self.cfg.TRAIN.CHIPS_DB_PARTS)))
         chips = []
+
         for i in range(self.cfg.TRAIN.CHIPS_DB_PARTS):
             chips += self.pool.map(self.chip_worker.chip_extractor,
-                                   self.roidb[i*n_per_part:min((i+1)*n_per_part, len(self.roidb))])
+                                    self.roidb[i*n_per_part:min((i+1)*n_per_part, len(self.roidb))])
 
         chip_count = 0
         for i, r in enumerate(self.roidb):
@@ -51,7 +57,7 @@ class MNIteratorE2E(MNIteratorBase):
         all_props_in_chips = []
         for i in range(self.cfg.TRAIN.CHIPS_DB_PARTS):
             all_props_in_chips += self.pool.map(self.chip_worker.box_assigner,
-                                   self.roidb[i*n_per_part:min((i+1)*n_per_part, len(self.roidb))])
+                                                self.roidb[i*n_per_part:min((i+1)*n_per_part, len(self.roidb))])
 
         for ps, cur_roidb in zip(all_props_in_chips, self.roidb):
             cur_roidb['props_in_chips'] = ps[0]
@@ -139,26 +145,19 @@ class MNIteratorE2E(MNIteratorBase):
             boxes = processed_roidb[i]['boxes'].copy()
             cur_crop = processed_roidb[i]['crops'][cropid][0]
             im_scale = processed_roidb[i]['crops'][cropid][1]
+            scalei = processed_roidb[i]['crops'][cropid][4]
             height = processed_roidb[i]['crops'][cropid][2]
             width = processed_roidb[i]['crops'][cropid][3]
             classes = processed_roidb[i]['max_classes'][gtids]
             if self.cfg.TRAIN.WITH_MASK:
                 gt_masks = processed_roidb[i]['gt_masks']
 
-            for scalei, cscale in enumerate(self.cfg.TRAIN.SCALES):
-                if scalei == len(self.cfg.TRAIN.SCALES) - 1:
-                    # Last or only scale
-                    srange[i, 0] = 0 if self.cfg.TRAIN.VALID_RANGES[scalei][0] < 0 else \
-                        self.cfg.TRAIN.VALID_RANGES[scalei][0] * im_scale
-                    srange[i, 1] = self.crop_size[1] if self.cfg.TRAIN.VALID_RANGES[scalei][1] < 0 else \
-                        self.cfg.TRAIN.VALID_RANGES[scalei][1] * im_scale  # max scale
-                elif im_scale == cscale:
-                    # Intermediate scale
-                    srange[i, 0] = 0 if self.cfg.TRAIN.VALID_RANGES[scalei][0] < 0 else \
-                        self.cfg.TRAIN.VALID_RANGES[scalei][0] * self.cfg.TRAIN.SCALES[scalei]
-                    srange[i, 1] = self.crop_size[1] if self.cfg.TRAIN.VALID_RANGES[scalei][1] < 0 else \
-                        self.cfg.TRAIN.VALID_RANGES[scalei][1] * self.cfg.TRAIN.SCALES[scalei]
-                    break
+            srange[i, 0] = 0 if self.cfg.TRAIN.VALID_RANGES[scalei][0] < 0 else \
+                self.cfg.TRAIN.VALID_RANGES[scalei][0] * im_scale
+
+            srange[i, 1] = self.crop_size[1] if self.cfg.TRAIN.VALID_RANGES[scalei][1] < 0 else \
+                self.cfg.TRAIN.VALID_RANGES[scalei][1] * im_scale
+
             chipinfo[i, 0] = height
             chipinfo[i, 1] = width
             chipinfo[i, 2] = im_scale
@@ -195,8 +194,12 @@ class MNIteratorE2E(MNIteratorBase):
         for i in range(len(processed_list)):
             im_tensor[i] = processed_list[i]
 
-        self.data = [im_tensor, mx.nd.array(srange), mx.nd.array(chipinfo)]
-        self.label = [labels, bbox_targets, bbox_weights, gt_boxes]
+        self.data = [im_tensor] if self.cfg.TRAIN.ONLY_PROPOSAL else \
+            [im_tensor, mx.nd.array(srange), mx.nd.array(chipinfo)]
+
+        self.label = [labels, bbox_targets, bbox_weights] if self.cfg.TRAIN.ONLY_PROPOSAL else \
+            [labels, bbox_targets, bbox_weights, gt_boxes]
+
         if self.cfg.TRAIN.WITH_MASK:
             self.label.append(mx.nd.array(encoded_masks))
         # self.visualize(im_tensor, gt_boxes)

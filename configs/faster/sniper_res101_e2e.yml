@@ -64,28 +64,51 @@ TRAIN:
   WITH_MASK: false
 
   # Training scales
-  # The last scale (or the only scale) should be the desired max resolution in pixels
-  # Other scales should be scaling coefficients
+  # The scales should be sorted in descending order based on size 
+  # (the first scale is the highest resolution and the last scale is the lowest one)
+  # Two types of scale definition are supported
   SCALES:
-  - 3.0
-  - 1.667
-  - 512.0
+  # 1) You can define scale based on resolutions in pixels
+  # [min_resolution, max_resolution]
+  # The shortest side of the image is resized to min_resolution while the 
+  # longest side is kept less than max_resolution
+  # -1 indicates no constraint on min/max resolution
+  - !!python/tuple [1400, 2000]
+  - !!python/tuple [800, 1280]
+  - !!python/tuple [-1, 512]
+  
+  # 2) Alternatively you can define the scaling factor as below:
+  # In this case, the lowest resolution should be the maximum side of image
+  # in pixels and all other scales should be defined as a float scaling factor
+  # The following are the scales we used in the paper for COCO dataset
+  # - 3.0
+  # - 1.667
+  # - 512.0
 
-  # Valid ranges in each scale
+
+
+  # Valid ranges in each scale (boxes which the square root of their area
+  # lie in each range are marked as valid in that scale).
+  # Values indicate the square root of the area of boxes in
+  # the **original** image resolution (before any scaling).
+  # If the resolution of the images in your dataset is higher than COCO,
+  # you can consider increasing these values based on the area distribution of
+  # small, medium and large objects in the original resolution of your dataset.
+  # -1 indicates having no constraint.
   VALID_RANGES:
   - !!python/tuple [-1,80]
   - !!python/tuple [32,150]
   - !!python/tuple [120,-1]
 
 
-  lr: 0.015 #0.002 #0.0005
+  lr: 0.015 
   lr_step: '5.33'
   warmup: true
   fp16: true
-  warmup_lr: 0.0005 #0.00005
+  warmup_lr: 0.0005 
   wd: 0.0001
   scale: 100.0
-  warmup_step: 1000 #4000 #1000
+  warmup_step: 1000
   begin_epoch: 0
   end_epoch: 7
 
@@ -93,9 +116,7 @@ TRAIN:
   FLIP: true
   # whether shuffle image
   SHUFFLE: true
-  # whether use OHEM
-  ENABLE_OHEM: true
-  # size of images for each device, 2 for rcnn, 1 for rpn and e2e
+  # Number of images per GPU
   BATCH_IMAGES: 16
   # e2e changes behavior of anchor loader and metric
   END2END: true
@@ -172,11 +193,14 @@ TEST:
   # concurrent jobs to increase throughput
   CONCURRENT_JOBS: 2
 
-  # Ranges to specify valid proposal length
-  # in each of the test scale, square area
-  # would be computed based on the lengths
-  # to invalidate, -1 means unbounded, use
-  # -1 everywhere if you want to have all proposals
+  # Valid ranges in each scale (boxes which the square root of their area
+  # lie in each range are marked as valid in that scale).
+  # Values indicate the square root of the area of boxes in
+  # the **original** image resolution (before any scaling).
+  # If the resolution of the images in your dataset is higher than COCO,
+  # you can consider increasing these values based on the area distribution of
+  # small, medium and large objects in the original resolution of your dataset.
+  # -1 indicates having no constraint.
   VALID_RANGES:
   - !!python/tuple [-1,90]
   - !!python/tuple [32,180]

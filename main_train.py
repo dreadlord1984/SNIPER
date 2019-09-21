@@ -54,6 +54,14 @@ if __name__ == '__main__':
     if not os.path.isdir(config.output_path):
         os.mkdir(config.output_path)
 
+    # The following is just to make sure the code reproduces
+    # results in the paper after default scale settings are changed to resolution-based
+    # However, new scale settings should lead to similar results
+    if config.dataset.dataset=='coco' and config.dataset.NUM_CLASSES==81:
+        # Change the scales to what we used in the paper for reproducibility
+        config.TRAIN.SCALES = (3.0, 1.667, 512.0)
+
+
     # Create roidb
     image_sets = [iset for iset in config.dataset.image_set.split('+')]
     roidbs = [load_proposal_roidb(config.dataset.dataset, image_set, config.dataset.root_path,
@@ -80,7 +88,7 @@ if __name__ == '__main__':
     # get list of fixed parameters
     print('Initializing the model...')
     sym_inst = eval('{}.{}'.format(config.symbol, config.symbol))(n_proposals=400, momentum=args.momentum)
-    sym = sym_inst.get_symbol_rcnn(config)
+    sym = sym_inst.get_symbol_rpn(config) if config.TRAIN.ONLY_PROPOSAL else sym_inst.get_symbol_rcnn(config)
 
     fixed_param_names = get_fixed_param_names(config.network.FIXED_PARAMS, sym)
 
@@ -95,7 +103,10 @@ if __name__ == '__main__':
     sym_inst.infer_shape(shape_dict)
     arg_params, aux_params = load_param(config.network.pretrained, config.network.pretrained_epoch, convert=True)
 
-    sym_inst.init_weight_rcnn(config, arg_params, aux_params)
+    if config.TRAIN.ONLY_PROPOSAL:
+        sym_inst.init_weight_rpn(config, arg_params, aux_params)
+    else:
+        sym_inst.init_weight_rcnn(config, arg_params, aux_params)
 
     # Creating the metrics
     eval_metric = metric.RPNAccMetric()
@@ -104,14 +115,16 @@ if __name__ == '__main__':
     rceval_metric = metric.RCNNAccMetric(config)
     rccls_metric  = metric.RCNNLogLossMetric(config)
     rcbbox_metric = metric.RCNNL1LossCRCNNMetric(config)
-    eval_metrics = mx.metric.CompositeEvalMetric()
 
+    eval_metrics = mx.metric.CompositeEvalMetric()
     eval_metrics.add(eval_metric)
     eval_metrics.add(cls_metric)
     eval_metrics.add(bbox_metric)
-    eval_metrics.add(rceval_metric)
-    eval_metrics.add(rccls_metric)
-    eval_metrics.add(rcbbox_metric)
+    if not config.TRAIN.ONLY_PROPOSAL:
+        eval_metrics.add(rceval_metric)
+        eval_metrics.add(rccls_metric)
+        eval_metrics.add(rcbbox_metric)
+
     if config.TRAIN.WITH_MASK:
         mask_metric = metric.MaskLogLossMetric(config)
         eval_metrics.add(mask_metric)
